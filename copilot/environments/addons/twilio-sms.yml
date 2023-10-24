@@ -1,0 +1,60 @@
+Parameters:
+  App:
+    Type: String
+    Description: Your application's name.
+  Env:
+    Type: String
+    Description: The name of the environment being deployed.
+
+Resources:
+  twiliosmsBucket:
+    Metadata:
+      'aws:copilot:description': 'An Amazon S3 bucket, twilio-sms, for storing and retrieving objects'
+    Type: AWS::S3::Bucket
+    Properties:
+      AccessControl: Private
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+        - ServerSideEncryptionByDefault:
+            SSEAlgorithm: AES256
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+      OwnershipControls:
+        Rules:
+          - ObjectOwnership: BucketOwnerEnforced
+
+  twiliosmsBucketPolicy:
+    Metadata:
+      'aws:copilot:description': 'A bucket policy to deny unencrypted access to the bucket and its contents'
+    Type: AWS::S3::BucketPolicy
+    DeletionPolicy: Retain
+    Properties:
+      PolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Sid: ForceHTTPS
+            Effect: Deny
+            Principal: '*'
+            Action: 's3:*'
+            Resource: 
+              - !Sub ${ twiliosmsBucket.Arn}/*
+              - !Sub ${ twiliosmsBucket.Arn}
+            Condition: 
+              Bool:
+                "aws:SecureTransport": false
+      Bucket: !Ref twiliosmsBucket
+
+Outputs:
+  twiliosmsName:
+    Description: "The name of a user-defined bucket."
+    Value: !Ref twiliosmsBucket
+    Export:
+      Name: !Sub ${App}-${Env}-twiliosmsBucketName
+  twiliosmsBucketARN:
+    Description: "The ARN of the twilio-sms bucket."
+    Value: !GetAtt twiliosmsBucket.Arn
+    Export:
+      Name: !Sub ${App}-${Env}-twiliosmsBucketARN
