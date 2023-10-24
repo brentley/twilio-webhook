@@ -21,7 +21,7 @@ This project sets up a simple web server to receive SMS messages from Twilio, st
 ## Setup
 
 1. Clone the repository to your local machine or server.
-2. Install the required Python packages using `pip install -r requirements.txt` (You need to create this file listing Flask and Boto3).
+2. Install the required Python packages using `pip install -r requirements.txt`.
 3. Set up an environment variable `DB_NAME` containing your S3 bucket name.
 4. Update the Twilio phone number's webhook URL to the route on your server that's set up to receive SMS messages.
 5. Run the Flask application.
