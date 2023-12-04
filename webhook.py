@@ -63,24 +63,33 @@ def receive_data():
 @app.route('/', methods=['GET'])
 def display_last_message():
     """
-    Endpoint to fetch and display the most recent message saved in S3.
+    Endpoint to fetch and display the most recent 'content' file, 
+    or if not available, the most recent JSON formatted file.
     """
     try:
         # Retrieve the list of files saved in S3
         files = s3.list_objects_v2(Bucket=BUCKET_NAME)['Contents']
 
-        # Sort and retrieve the most recent file
-        recent_file = sorted(files, key=lambda x: x['LastModified'], reverse=True)[0]
+        # Sort files by last modified date
+        sorted_files = sorted(files, key=lambda x: x['LastModified'], reverse=True)
 
-        # Fetch the content of the most recent file
-        file_content = s3.get_object(Bucket=BUCKET_NAME, Key=recent_file['Key'])['Body'].read().decode('utf-8')
+        # Try to find the most recent 'content' file
+        content_file = next((f for f in sorted_files if f['Key'].startswith('json_data_content_')), None)
 
-        # Check if the file is JSON and format display accordingly
-        if recent_file['Key'].endswith('.json'):
-            file_content = json.loads(file_content)
-            file_content = json.dumps(file_content, indent=4)
+        if content_file:
+            # Fetch and display the content file
+            file_content = s3.get_object(Bucket=BUCKET_NAME, Key=content_file['Key'])['Body'].read().decode('utf-8')
+        else:
+            # If no content file, find the most recent JSON file
+            json_file = next((f for f in sorted_files if f['Key'].startswith('json_data_') and f['Key'].endswith('.json')), None)
+            if json_file:
+                # Fetch and display the JSON file
+                file_content = s3.get_object(Bucket=BUCKET_NAME, Key=json_file['Key'])['Body'].read().decode('utf-8')
+                file_content = json.dumps(json.loads(file_content), indent=4)
+            else:
+                return "No content or JSON files available."
 
-        # Construct HTML to display the message content
+        # Construct HTML to display the file content
         html_content = f"""
         <!doctype html>
         <html>
