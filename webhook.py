@@ -1,4 +1,4 @@
-from flask import Flask, request, Response, render_template_string, jsonify
+from flask import Flask, request, jsonify, render_template_string
 import boto3
 from datetime import datetime
 import os
@@ -13,47 +13,52 @@ s3 = boto3.client('s3')
 # Retrieve the S3 bucket name from an environment variable
 BUCKET_NAME = os.environ.get("DB_NAME")
 
-def save_message_to_s3(message, prefix, is_json=False):
+def save_to_s3(data, filename):
     """
-    Saves an SMS message or JSON data to an S3 bucket.
+    Saves data to an S3 bucket with the given filename.
 
-    :param message: The content of the SMS message or JSON data.
-    :param prefix: The prefix for the S3 file naming.
-    :param is_json: Boolean indicating if the message is JSON.
+    :param data: The data to be saved.
+    :param filename: The filename for the S3 object.
     """
     try:
-        # Create a unique filename with a timestamp
-        timestamp = datetime.now().strftime('%Y-%m-%d-%H-%M-%S')
-        file_extension = 'json' if is_json else 'txt'
-        filename = f'{prefix}_{timestamp}.{file_extension}'
+        # Convert the data to a string if it's not
+        if not isinstance(data, str):
+            data = json.dumps(data)
 
-        # Convert the message to a string if it's JSON
-        if is_json:
-            message = json.dumps(message)
-
-        # Save the file to S3
-        s3.put_object(Bucket=BUCKET_NAME, Key=filename, Body=message)
+        # Save the data to S3
+        s3.put_object(Bucket=BUCKET_NAME, Key=filename, Body=data)
     except Exception as e:
-        # Log any exceptions that occur
         print(f"An error occurred: {str(e)}")
 
-@app.route('/', methods=['POST'])
-def receive_sms():
+def save_json_and_content(json_data, prefix):
     """
-    Endpoint to receive SMS or JSON from a client, save it to S3, and respond accordingly.
+    Saves the JSON data and the 'content' value from it to the S3 bucket.
+
+    :param json_data: The JSON data received.
+    :param prefix: The prefix for the S3 file naming.
+    """
+    timestamp = datetime.now().strftime('%Y-%m-%d-%H-%M-%S')
+    json_filename = f'{prefix}_{timestamp}.json'
+    text_filename = f'{prefix}_content_{timestamp}.txt'
+
+    # Save the entire JSON
+    save_to_s3(json_data, json_filename)
+
+    # Extract the 'content' value and save it as a text file
+    content = json_data.get('content', '')
+    save_to_s3(content, text_filename)
+
+@app.route('/', methods=['POST'])
+def receive_data():
+    """
+    Endpoint to receive JSON data, save it, and also save its 'content' field separately.
     """
     if request.is_json:
-        # Handle JSON data
         data = request.get_json()
-        save_message_to_s3(data, "json_data", is_json=True)
-        return jsonify({"status": "JSON data received and saved"})
+        save_json_and_content(data, "json_data")
+        return jsonify({"status": "JSON data and content saved"})
     else:
-        # Handle regular text data
-        message_body = request.form.get('Body', '')  # Extract the message content from the request
-        save_message_to_s3(message_body, "sms")  # Save the SMS message to S3
-
-        # Return an empty TwiML response to acknowledge receipt of the message
-        return Response('<?xml version="1.0" encoding="UTF-8"?><Response></Response>', mimetype='text/xml')
+        return jsonify({"status": "Invalid request, expecting JSON"})
 
 @app.route('/', methods=['GET'])
 def display_last_message():
@@ -61,13 +66,11 @@ def display_last_message():
     Endpoint to fetch and display the most recent message saved in S3.
     """
     try:
-        # Retrieve the list of files saved in S3 under the 'sms_' and 'json_data' prefixes
-        sms_files = s3.list_objects_v2(Bucket=BUCKET_NAME, Prefix='sms_')['Contents']
-        json_files = s3.list_objects_v2(Bucket=BUCKET_NAME, Prefix='json_data_')['Contents']
-        all_files = sms_files + json_files
+        # Retrieve the list of files saved in S3
+        files = s3.list_objects_v2(Bucket=BUCKET_NAME)['Contents']
 
         # Sort and retrieve the most recent file
-        recent_file = sorted(all_files, key=lambda x: x['LastModified'], reverse=True)[0]
+        recent_file = sorted(files, key=lambda x: x['LastModified'], reverse=True)[0]
 
         # Fetch the content of the most recent file
         file_content = s3.get_object(Bucket=BUCKET_NAME, Key=recent_file['Key'])['Body'].read().decode('utf-8')
@@ -92,9 +95,7 @@ def display_last_message():
         """
         return render_template_string(html_content)
     except Exception as e:
-        # If an error occurs, return the error message
         return str(e)
 
 if __name__ == '__main__':
-    # Run the application
     app.run(debug=True, host='0.0.0.0', port=5001)
