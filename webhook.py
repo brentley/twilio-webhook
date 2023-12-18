@@ -30,6 +30,28 @@ def save_to_s3(data, filename):
     except Exception as e:
         print(f"An error occurred: {str(e)}")
 
+def save_mfa_message(content):
+    """
+    Appends the provided content to the mfa-message.txt file in the S3 bucket.
+
+    :param content: The content to be appended.
+    """
+    mfa_filename = 'mfa-message.txt'
+    try:
+        # Check if the mfa-message.txt file exists
+        try:
+            existing_content = s3.get_object(Bucket=BUCKET_NAME, Key=mfa_filename)['Body'].read().decode('utf-8')
+        except s3.exceptions.NoSuchKey:
+            existing_content = ''
+
+        # Append new content
+        updated_content = existing_content + '\n' + content
+
+        # Save the updated content to S3
+        s3.put_object(Bucket=BUCKET_NAME, Key=mfa_filename, Body=updated_content)
+    except Exception as e:
+        print(f"An error occurred while appending to mfa-message.txt: {str(e)}")
+
 def save_json_and_content(json_data, prefix):
     """
     Saves the JSON data and the 'content' value from it to the S3 bucket.
@@ -47,6 +69,9 @@ def save_json_and_content(json_data, prefix):
     # Extract the 'content' value and save it as a text file
     content = json_data.get('content', '')
     save_to_s3(content, text_filename)
+
+    # Also append the content to mfa-message.txt
+    save_mfa_message(content)
 
 @app.route('/', methods=['POST'])
 def receive_data():
@@ -108,3 +133,4 @@ def display_last_message():
 
 if __name__ == '__main__':
     app.run(debug=True, host='0.0.0.0', port=5001)
+
