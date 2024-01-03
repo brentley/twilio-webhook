@@ -50,9 +50,9 @@ def save_json_and_content(json_data, prefix):
         text_filename = f'{prefix}_content_{timestamp}.txt'
         save_to_s3(content, text_filename)
 
-        # Save the content in a file named after the sender
-        sender_name = json_data.get('sender', 'unknown_sender')
-        sender_filename = f'{sender_name}_content.txt'
+        # Extract the sender's phone number from the JSON data
+        sender_phone = json_data.get('from', 'unknown_sender')
+        sender_filename = f'{sender_phone}_content.txt'
         save_to_s3(content, sender_filename)
 
 @app.route('/', methods=['POST'])
