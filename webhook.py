@@ -32,38 +32,34 @@ def save_to_s3(data, filename):
 
 def save_json_and_content(json_data, prefix):
     """
-    Saves the JSON data and the 'content' value from it to the S3 bucket.
-    Additionally, saves the 'content' in a file named after the sender.
+    Saves the entire JSON data, the 'content' value, and the content in a sender-named file.
     :param json_data: The JSON data received.
     :param prefix: The prefix for the S3 file naming.
     """
-    # Generate a timestamp for the filename
+    # Generate a timestamp for the filenames
     timestamp = datetime.now().strftime('%Y-%m-%d-%H-%M-%S')
 
-    # Create filenames for storing the entire JSON and its 'content' part
+    # Filename for the entire JSON data
     json_filename = f'{prefix}_{timestamp}.json'
-    text_filename = f'{prefix}_content_{timestamp}.txt'
-
     # Save the entire JSON
     save_to_s3(json_data, json_filename)
 
-    # Extract the 'content' value and save it as a separate text file
-    content = json_data.get('content', '')
-    save_to_s3(content, text_filename)
+    # Extract the 'content' value and save it as a separate text file, if available
+    content = json_data.get('content')
+    if content is not None:
+        text_filename = f'{prefix}_content_{timestamp}.txt'
+        save_to_s3(content, text_filename)
 
-    # Extract the sender's name from the JSON data
-    sender_name = json_data.get('sender', 'unknown_sender')
-    # Create a filename for the sender-specific file
-    sender_filename = f'{sender_name}_content.txt'
-    # Save the content to the sender-specific file, overwriting if it exists
-    save_to_s3(content, sender_filename)
+        # Save the content in a file named after the sender
+        sender_name = json_data.get('sender', 'unknown_sender')
+        sender_filename = f'{sender_name}_content.txt'
+        save_to_s3(content, sender_filename)
 
 @app.route('/', methods=['POST'])
 def receive_data():
     """
     Endpoint to receive JSON data via POST requests.
-    Saves the data and the 'content' field separately.
-    Also saves the 'content' field in a sender-named file.
+    Saves the data, the 'content' field, and the content in a sender-named file.
     """
     if request.is_json:
         # Extract JSON data from the request
