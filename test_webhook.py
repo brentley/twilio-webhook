@@ -23,12 +23,13 @@ class TestWebhook(unittest.TestCase):
 
     @patch('webhook.save_to_s3')
     def test_save_json_and_content(self, mock_save_to_s3):
-        json_data = {"content": "example", "other_key": "value"}
+        json_data = {"content": "example", "other_key": "value", "sender": "test_sender"}
         prefix = "test_prefix"
         timestamp_regex = r'\d{4}-\d{2}-\d{2}-\d{2}-\d{2}-\d{2}'
         save_json_and_content(json_data, prefix)
         mock_save_to_s3.assert_any_call(json_data, unittest.mock.ANY)
         mock_save_to_s3.assert_any_call("example", unittest.mock.ANY)
+        mock_save_to_s3.assert_any_call("example", "test_sender_content.txt")
         self.assertRegex(mock_save_to_s3.call_args_list[0][0][1], f"{prefix}_{timestamp_regex}.json")
         self.assertRegex(mock_save_to_s3.call_args_list[1][0][1], f"{prefix}_content_{timestamp_regex}.txt")
 

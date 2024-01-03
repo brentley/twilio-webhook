@@ -16,79 +16,72 @@ BUCKET_NAME = os.environ.get("DB_NAME")
 def save_to_s3(data, filename):
     """
     Saves data to an S3 bucket with the given filename.
-
     :param data: The data to be saved.
     :param filename: The filename for the S3 object.
     """
     try:
-        # Convert the data to a string if it's not
+        # Convert the data to a string if it's not already
         if not isinstance(data, str):
             data = json.dumps(data)
 
         # Save the data to S3
         s3.put_object(Bucket=BUCKET_NAME, Key=filename, Body=data)
     except Exception as e:
+        # Log any exceptions that occur
         print(f"An error occurred: {str(e)}")
-
-def save_mfa_message(content):
-    """
-    Appends the provided content to the mfa-message.txt file in the S3 bucket.
-
-    :param content: The content to be appended.
-    """
-    mfa_filename = 'mfa-message.txt'
-    try:
-        # Check if the mfa-message.txt file exists
-        try:
-            existing_content = s3.get_object(Bucket=BUCKET_NAME, Key=mfa_filename)['Body'].read().decode('utf-8')
-        except s3.exceptions.NoSuchKey:
-            existing_content = ''
-
-        # Append new content
-        updated_content = existing_content + '\n' + content
-
-        # Save the updated content to S3
-        s3.put_object(Bucket=BUCKET_NAME, Key=mfa_filename, Body=updated_content)
-    except Exception as e:
-        print(f"An error occurred while appending to mfa-message.txt: {str(e)}")
 
 def save_json_and_content(json_data, prefix):
     """
     Saves the JSON data and the 'content' value from it to the S3 bucket.
-
+    Additionally, saves the 'content' in a file named after the sender.
     :param json_data: The JSON data received.
     :param prefix: The prefix for the S3 file naming.
     """
+    # Generate a timestamp for the filename
     timestamp = datetime.now().strftime('%Y-%m-%d-%H-%M-%S')
+
+    # Create filenames for storing the entire JSON and its 'content' part
     json_filename = f'{prefix}_{timestamp}.json'
     text_filename = f'{prefix}_content_{timestamp}.txt'
 
     # Save the entire JSON
     save_to_s3(json_data, json_filename)
 
-    # Extract the 'content' value and save it as a text file
+    # Extract the 'content' value and save it as a separate text file
     content = json_data.get('content', '')
     save_to_s3(content, text_filename)
 
-    # Also append the content to mfa-message.txt
-    save_mfa_message(content)
+    # Extract the sender's name from the JSON data
+    sender_name = json_data.get('sender', 'unknown_sender')
+    # Create a filename for the sender-specific file
+    sender_filename = f'{sender_name}_content.txt'
+    # Save the content to the sender-specific file, overwriting if it exists
+    save_to_s3(content, sender_filename)
 
 @app.route('/', methods=['POST'])
 def receive_data():
     """
-    Endpoint to receive JSON data, save it, and also save its 'content' field separately.
+    Endpoint to receive JSON data via POST requests.
+    Saves the data and the 'content' field separately.
+    Also saves the 'content' field in a sender-named file.
     """
     if request.is_json:
+        # Extract JSON data from the request
         data = request.get_json()
+
+        # Save the received JSON data and its content
         save_json_and_content(data, "json_data")
+
+        # Respond with a success message
         return jsonify({"status": "JSON data and content saved"})
     else:
+        # Respond with an error message for non-JSON requests
         return jsonify({"status": "Invalid request, expecting JSON"})
 
 @app.route('/', methods=['GET'])
 def display_last_message():
     """
-    Endpoint to fetch and display the most recent 'content' file, 
+    Endpoint to fetch and display the most recent 'content' file,
     or if not available, the most recent JSON formatted file.
     """
     try:
@@ -129,8 +122,10 @@ def display_last_message():
         """
         return render_template_string(html_content)
     except Exception as e:
+        # Log and return any exceptions that occur
         return str(e)
 
 if __name__ == '__main__':
+    # Run the Flask app on port 5001
     app.run(debug=True, host='0.0.0.0', port=5001)
 
